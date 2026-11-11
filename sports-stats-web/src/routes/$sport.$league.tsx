@@ -1,16 +1,8 @@
-import {createFileRoute, notFound, Outlet } from "@tanstack/react-router";
-
-import { getLeague } from "../config/sports";
+import { createFileRoute, notFound } from "@tanstack/react-router";
+import { findLeague } from "../config/navigation";
 
 export const Route = createFileRoute("/$sport/$league")({
-    beforeLoad: ({ params }) => {
-        if (!getLeague(params.sport, params.league)) {
-            throw notFound();
-        }
-    },
-    component: LeagueLayout,
+  beforeLoad: ({ params }) => {
+    if (!findLeague(params.sport, params.league)) throw notFound();
+  },
 });
-
-function LeagueLayout() {
-    return <Outlet />;
-}

@@ -1,85 +1,57 @@
-export const sports = [
-    {
-        name: "Football",
-        slug: "football",
-        leagues: [
-            { name: "NFL", slug: "nfl" },
-            { name: "NCAAF", slug: "ncaaf" },
-        ],
-    },
-    {
-        name: "Basketball",
-        slug: "basketball",
-        leagues: [
-            { name: "NBA", slug: "nba" },
-            { name: "NCAAB", slug: "ncaab" },
-            { name: "NBL", slug: "nbl" },
-            {name: "WNBA", slug: "wnba"},
-        ],
-    },
-    {
-        name: "Hockey",
-        slug: "hockey",
-        leagues: [
-            { name: "NHL", slug: "nhl" },
-        ],
-    },
-    {
-        name: "Baseball",
-        slug: "baseball",
-        leagues: [
-            { name: "MLB", slug: "mlb" },
-        ],
-    },
-    {
-        name: "Soccer",
-        slug: "soccer",
-        leagues: [
-            { name: "Premier League", slug: "premier-league" },
-            { name: "LaLiga", slug: "laliga" },
-            { name: "Serie A", slug: "serie-a" },
-            { name: "Bundesliga", slug: "bundesliga" },
-            { name: "Ligue 1", slug: "ligue-1" },
-            { name: 'UEFA Champions League', slug: "uefa-champions-league"},
-            { name: "UEFA Europa League", slug: "uefa-europa-league"},
-            //{ name: "MLS", slug: "mls" },
-            { name: "Championship", slug: "championship" },
-        ],
-    },
+export type NavItem = { slug: string; name: string };
+export type Sport = NavItem & { leagues: NavItem[]; sections: string[] };
+
+export const SECTIONS: NavItem[] = [
+  { slug: "team-summary", name: "Team summary" },
+  { slug: "team-stats", name: "Team stats" },
+  { slug: "rankings", name: "Rankings" },
+  { slug: "period-stats", name: "Period stats" },
+  { slug: "quarter-stats", name: "Quarter stats" },
+  { slug: "players", name: "Players" },
 ];
 
-export const sections = [
-    { name: "Team summary", slug: "team-summary" },
-    { name: "Team stats", slug: "team-stats" },
-    { name: "Rankings", slug: "rankings" },
-    { name: "Period stats", slug: "period-stats" },
-    { name: "Players", slug: "players" },
+const DEFAULT_SECTIONS = ["team-summary", "team-stats", "rankings", "players"];
+
+export const SPORTS: Sport[] = [
+  {
+    name: "Football",
+    slug: "football",
+    leagues: [
+      { name: "NFL", slug: "nfl" },
+      { name: "NCAAF", slug: "ncaaf" },
+    ],
+    sections: DEFAULT_SECTIONS,
+  },
+  {
+    name: "Basketball",
+    slug: "basketball",
+    leagues: [
+      { name: "NBA", slug: "nba" },
+      { name: "NCAAB", slug: "ncaab" },
+      { name: "NBL", slug: "nbl" },
+      { name: "WNBA", slug: "wnba" },
+    ],
+    sections: ["team-summary", "team-stats", "rankings", "quarter-stats", "players"],
+  },
+  {
+    name: "Hockey",
+    slug: "hockey",
+    leagues: [{ name: "NHL", slug: "nhl" }],
+    sections: ["team-summary", "rankings", "period-stats", "players"],
+  },
+  {
+    name: "Baseball",
+    slug: "baseball",
+    leagues: [{ name: "MLB", slug: "mlb" }],
+    sections: DEFAULT_SECTIONS,
+  },
+  {
+    name: "Soccer",
+    slug: "soccer",
+    // Soccer competitions come from SOCCER_LEAGUES in soccerService (see navigation.ts).
+    leagues: [],
+    sections: DEFAULT_SECTIONS,
+  },
 ];
 
-export function getSport(slug: string) {
-    return sports.find((sport) => sport.slug === slug);
-}
-
-export function getLeague(sportSlug: string, leagueSlug: string) {
-    return getSport(sportSlug)?.leagues.find(
-        (league) => league.slug === leagueSlug
-    );
-}
-
-export function getSections(sportSlug: string, leagueSlug) {
-    if (sportSlug === "hockey") {
-        return sections.filter((section) =>
-            ["team-summary", "rankings", "period-stats", "players"]
-                .includes(section.slug)
-        );
-    }
-
-    if (sportSlug === "soccer") {
-        return sections.filter((section) =>
-            ["team-summary", "team-stats", "rankings", "players"]
-                .includes(section.slug)
-        );
-    }
-
-    return sections.filter((section) => section.slug !== "period-stats");
-}
+export const getSport = (slug: string) => SPORTS.find((sport) => sport.slug === slug);

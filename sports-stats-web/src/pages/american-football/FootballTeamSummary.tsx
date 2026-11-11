@@ -1,329 +1,425 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import StatsTable, { type StatsColumn } from "../../component/shared/StatsTable";
+import { DataTable } from "../../component/table/DataTable";
 import {
-    FootballBadge,
-    FootballError,
-    FootballForm,
-    FootballLineSelect,
-    FootballLoading,
-    FootballLocationSwitch,
-    FootballPanel,
-    FootballRatePill,
-    FootballStatCard,
-} from "../../component/american-football/FootballUI";
+  Card,
+  EmptyState,
+  Footnote,
+  FormStrip,
+  LocationSwitch,
+  MiniStat,
+  Notice,
+  Page,
+  PageHeader,
+  QueryState,
+  RateLegend,
+  RatePill,
+  Section,
+  SelectField,
+  StatCard,
+  StatGrid,
+  TeamBadge,
+  TeamLink,
+} from "../../component/ui";
+import { average, bestBy, fmtNum, fmtPct, fmtSigned, overOptions, range } from "../../lib/format";
+import { MARKET_SCALE } from "../../lib/rates";
+import type { FormResult } from "../../lib/results";
+import type { StatsColumn } from "../../lib/table";
+import type { Location } from "../../lib/types";
 import {
-    betSummary,
-    fetchFootballSummary,
-    footballNumber,
-    footballPercent,
-    getFootballLeague,
-    INITIAL_LINES,
-    orderedMatches,
-    quarterSummary,
-    teamConference,
-    type FootballLines,
-    type FootballLocation,
-    type FootballTeam,
+  betSummary,
+  conferencesOf,
+  footballSummaryQuery,
+  getFootballLeague,
+  INITIAL_LINES,
+  periodScore,
+  teamConference,
+  type FootballBetKind,
+  type FootballLines,
+  type FootballMatch,
+  type FootballTeam,
 } from "../../services/americanFootballService";
+import { BETS, footballForm, LAST_N_OPTIONS, record, SPORT, spreadOptions } from "./football";
 
-const EMPTY_TEAMS: FootballTeam[] = [];
-const QUARTERS = ["Q1", "Q2", "Q3", "Q4"] as const;
-
-const ranges = (start: number, end: number, step = 1): number[] =>
-    Array.from({ length: Math.floor((end - start) / step) + 1 }, (_, i) =>
-        Number((start + i * step).toFixed(1)),
-    );
-
-const record = (team: FootballTeam, location: FootballLocation): string => {
-    const stats = team[location];
-    return `${stats.wins}–${stats.losses}${stats.ties ? `–${stats.ties}` : ""}`;
+type Row = {
+  id: number;
+  name: string;
+  gp: number;
+  record: string;
+  winPct: number;
+  pf: number;
+  pa: number;
+  net: number;
+  total: number;
+  rates: Record<FootballBetKind, number | null>;
+  form: FormResult[];
+  matches: FootballMatch[];
 };
 
-const hitRate = (
-    team: FootballTeam,
-    location: FootballLocation,
-    kind: keyof FootballLines,
-    line: number,
-): number | null => betSummary(team[location].matches, kind, line).pct;
+const QUARTERS = ["Q1", "Q2", "Q3", "Q4"] as const;
 
-function leader(
-    teams: FootballTeam[],
-    key: "win_pct" | "points_for_per_game" | "points_against_per_game" | "total_points_per_game",
-    location: FootballLocation,
-    highest = true,
-): FootballTeam | undefined {
-    return [...teams].sort((a, b) =>
-        highest ? b[location][key] - a[location][key] : a[location][key] - b[location][key],
-    )[0];
-}
-
-function QuarterOverview({
-                             teams,
-                             location,
-                             lastN,
-                         }: {
-    teams: FootballTeam[];
-    location: FootballLocation;
-    lastN: number;
-}) {
-    const [line, setLine] = useState(14.5);
-    const subset = teams.slice(0, 10);
-
-    return (
-        <FootballPanel
-            title="Quarter by quarter"
-            description="Period totals and hit rates (Q1–Q4 only; overtime excluded)."
-        >
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs text-muted">Change the quarter total line to compare results.</span>
-                <FootballLineSelect
-                    label="Quarter total"
-                    value={line}
-                    onChange={setLine}
-                    options={ranges(4.5, 30.5)}
-                />
-            </div>
-            <div className="overflow-x-auto rounded-xl border border-line bg-white">
-                <table className="w-full min-w-[690px] text-left text-xs">
-                    <thead className="bg-surface-soft">
-                    <tr>
-                        <th className="px-4 py-3 text-[10px] font-semibold text-muted">TEAM</th>
-                        {QUARTERS.map((quarter) => (
-                            <th key={quarter} className="px-3 py-3 text-center text-[10px] font-semibold text-muted">
-                                {quarter}
-                            </th>
-                        ))}
-                        <th className="px-3 py-3 text-center text-[10px] font-semibold text-muted">BEST QUARTER</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {subset.map((team) => {
-                        const matches = orderedMatches(team[location].matches).slice(0, lastN);
-                        const summaries = QUARTERS.map((quarter) => quarterSummary(matches, quarter, line));
-                        const bestIndex = summaries.reduce((best, current, index) => {
-                            const currentRate = current.n ? current.wins / current.n : -1;
-                            const bestRate = summaries[best].n ? summaries[best].wins / summaries[best].n : -1;
-                            return currentRate > bestRate ? index : best;
-                        }, 0);
-                        const best = summaries[bestIndex];
-
-                        return (
-                            <tr key={team.team_pk} className="border-t border-line-soft">
-                                <td className="whitespace-nowrap px-4 py-2.5 font-semibold text-ink">
-                                    {team.team_name}
-                                </td>
-                                {summaries.map((summary, index) => (
-                                    <td key={QUARTERS[index]} className="px-3 py-2 text-center">
-                                        <FootballRatePill rate={summary.n ? (summary.over / summary.n) * 100 : null} />
-                                        <p className="mt-1 whitespace-nowrap text-[10px] text-muted">
-                                            {footballNumber(summary.scored)} pts · won {summary.n ? Math.round((summary.wins / summary.n) * 100) : 0}%
-                                        </p>
-                                    </td>
-                                ))}
-                                <td className="px-3 py-2 text-center text-[11px] text-muted">
-                                    {best.n ? `${QUARTERS[bestIndex]} · won ${Math.round((best.wins / best.n) * 100)}%` : "—"}
-                                </td>
-                            </tr>
-                        );
-                    })}
-                    </tbody>
-                </table>
-                <p className="border-t border-line-soft px-3 py-2 text-[11px] text-muted">
-                    Showing up to 10 teams · four regulation quarters only
-                </p>
-            </div>
-        </FootballPanel>
-    );
-}
-
-export default function FootballTeamSummary({ leagueKey }: { leagueKey: string }) {
-    const league = getFootballLeague(leagueKey);
-    const [location, setLocation] = useState<FootballLocation>("overall");
-    const [lastN, setLastN] = useState(10);
-    const [lines, setLines] = useState<FootballLines>(INITIAL_LINES);
-    const [conference, setConference] = useState("All");
-    const [search, setSearch] = useState("");
-    const [sort, setSort] = useState("winPct");
-    const [desc, setDesc] = useState(true);
-    const [showAll, setShowAll] = useState(false);
-
-    const query = useQuery({
-        queryKey: ["football", "summary", leagueKey, league?.seasonId, location, lastN, lines],
-        queryFn: ({ signal }) => fetchFootballSummary({ league: league!, location, lastN, lines }, signal),
-        enabled: !!league?.seasonId,
-        staleTime: 60_000,
-        retry: 1,
-    });
-
-    const teams = query.data?.teams ?? EMPTY_TEAMS;
-    const conferences = useMemo(
-        () => [...new Set(teams.map((team) => teamConference(team, leagueKey)).filter((x): x is string => !!x))].sort(),
-        [teams, leagueKey],
-    );
-    const filtered = useMemo(
-        () => teams.filter((team) =>
-            team.team_name.toLowerCase().includes(search.toLowerCase()) &&
-            (conference === "All" || teamConference(team, leagueKey) === conference),
-        ),
-        [teams, search, conference, leagueKey],
-    );
-
-    const sorted = useMemo(() => {
-        const metric = (team: FootballTeam): number => {
-            const stats = team[location];
-            switch (sort) {
-                case "pf": return stats.points_for_per_game;
-                case "pa": return stats.points_against_per_game;
-                case "total": return stats.total_points_per_game;
-                case "passing": return stats.passing_yards_per_game;
-                case "rushing": return stats.rushing_yards_per_game;
-                case "gameTotal": return hitRate(team, location, "gameTotal", lines.gameTotal) ?? -1;
-                case "winPct":
-                default: return stats.win_pct;
-            }
-        };
-        return [...filtered].sort((a, b) =>
-            (metric(a) - metric(b)) * (desc ? -1 : 1) || a.team_name.localeCompare(b.team_name),
-        );
-    }, [filtered, location, sort, desc, lines]);
-
-    const columns = useMemo<StatsColumn<FootballTeam>[]>(() => [
-        { key: "gp", label: "GP", render: (t) => t[location].games_played, priority: "main" },
-        { key: "record", label: "W–L", render: (t) => record(t, location), priority: "main" },
-        { key: "winPct", label: "WIN %", render: (t) => <strong>{footballPercent(t[location].win_pct, 1)}</strong>, sortValue: (t) => t[location].win_pct, priority: "main" },
-        { key: "pf", label: "PF", render: (t) => footballNumber(t[location].points_for_per_game), sortValue: (t) => t[location].points_for_per_game, priority: "main" },
-        { key: "pa", label: "PA", render: (t) => footballNumber(t[location].points_against_per_game), sortValue: (t) => t[location].points_against_per_game, priority: "medium" },
-        { key: "net", label: "NET", render: (t) => {
-                const net = t[location].points_for_per_game - t[location].points_against_per_game;
-                return <span className={net > 0 ? "font-semibold text-accent-strong" : ""}>{net > 0 ? "+" : ""}{footballNumber(net)}</span>;
-            }, priority: "main" },
-        { key: "total", label: "TOTAL", render: (t) => footballNumber(t[location].total_points_per_game), sortValue: (t) => t[location].total_points_per_game, priority: "main" },
-        { key: "passing", label: "PASS YDS", render: (t) => footballNumber(t[location].passing_yards_per_game), sortValue: (t) => t[location].passing_yards_per_game, priority: "all" },
-        { key: "rushing", label: "RUSH YDS", render: (t) => footballNumber(t[location].rushing_yards_per_game), sortValue: (t) => t[location].rushing_yards_per_game, priority: "all" },
-        { key: "turnovers", label: "TO", render: (t) => footballNumber(t[location].turnovers_per_game, 2), priority: "all" },
-        { key: "gameTotal", label: `O${lines.gameTotal}`, render: (t) => <FootballRatePill rate={hitRate(t, location, "gameTotal", lines.gameTotal)} />, sortValue: (t) => hitRate(t, location, "gameTotal", lines.gameTotal) ?? -1, priority: "main" },
-        { key: "teamTotal", label: `TT O${lines.teamTotal}`, render: (t) => <FootballRatePill rate={hitRate(t, location, "teamTotal", lines.teamTotal)} />, priority: "medium" },
-        { key: "teamSpread", label: `COVER ${lines.teamSpread}`, render: (t) => <FootballRatePill rate={hitRate(t, location, "teamSpread", lines.teamSpread)} />, priority: "medium" },
-        { key: "oppSpread", label: `OPP ${lines.opponentSpread > 0 ? "+" : ""}${lines.opponentSpread}`, render: (t) => <FootballRatePill rate={hitRate(t, location, "opponentSpread", lines.opponentSpread)} />, priority: "medium" },
-        { key: "form", label: "LAST 5", render: (t) => <FootballForm results={orderedMatches(t[location].matches).slice(0, 5).map((m) => m.result)} />, priority: "main" },
-    ], [location, lines]);
-
-    // Hooks must run before conditional returns.
-    if (!league) return <FootballError message={`Unknown football league: ${leagueKey}`} />;
-    if (!league.seasonId) return <FootballError message={`Set VITE_FOOTBALL_${leagueKey.toUpperCase()}_SEASON_ID in your .env file.`} />;
-    if (query.isPending) return <FootballLoading />;
-    if (query.isError) return <FootballError message={query.error.message} retry={() => void query.refetch()} />;
-
-    const best = leader(teams, "win_pct", location);
-    const offense = leader(teams, "points_for_per_game", location);
-    const defense = leader(teams, "points_against_per_game", location, false);
-    const totals = leader(teams, "total_points_per_game", location);
-    const topOver = [...teams].sort((a, b) =>
-        (hitRate(b, location, "gameTotal", lines.gameTotal) ?? -1) - (hitRate(a, location, "gameTotal", lines.gameTotal) ?? -1),
-    )[0];
-    const setLine = (field: keyof FootballLines, value: number) => {
-        setLines((previous) => ({ ...previous, [field]: value }));
-        setShowAll(false);
+function toRows(teams: FootballTeam[], location: Location, lines: FootballLines): Row[] {
+  return teams.map((team) => {
+    const s = team[location];
+    return {
+      id: team.team_pk,
+      name: team.team_name,
+      gp: s.games_played,
+      record: record(s),
+      winPct: s.win_pct,
+      pf: s.points_for_per_game,
+      pa: s.points_against_per_game,
+      net: s.points_for_per_game - s.points_against_per_game,
+      total: s.total_points_per_game,
+      rates: Object.fromEntries(
+        BETS.map((bet) => [bet.key, betSummary(s.matches, bet.key, lines[bet.key]).pct]),
+      ) as Row["rates"],
+      form: footballForm(s.matches),
+      matches: s.matches,
     };
+  });
+}
 
-    return (
-        <main className="w-full min-w-0 space-y-7 pb-12">
-            <header className="flex flex-wrap items-end justify-between gap-4">
-                <div>
-                    <p className="eyebrow">{league.label} · SEASON {query.data?.competition_season_id ?? league.seasonId}</p>
-                    <h1 className="mt-1 text-3xl font-bold text-ink">Team summary</h1>
-                    <p className="mt-2 text-sm text-muted">Scoring, offense and line hit rates for {teams.length} teams.</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                    <FootballLocationSwitch value={location} onChange={(value) => { setLocation(value); setShowAll(false); }} />
-                    {conferences.length > 0 && (
-                        <label className="flex items-center gap-2 text-xs text-muted">
-                            Conference
-                            <select
-                                value={conference}
-                                onChange={(event) => { setConference(event.target.value); setShowAll(false); }}
-                                className="rounded-lg border border-line bg-white px-2 py-2 text-ink"
-                            >
-                                <option value="All">All</option>
-                                {conferences.map((item) => <option key={item} value={item}>{item}</option>)}
-                            </select>
-                        </label>
-                    )}
-                    <label className="flex items-center gap-2 text-xs text-muted">
-                        Last
-                        <select
-                            value={lastN}
-                            onChange={(event) => { setLastN(Number(event.target.value)); setShowAll(false); }}
-                            className="rounded-lg border border-line bg-white px-2 py-2 font-semibold text-ink"
-                        >
-                            {[5, 10, 20, 50, 100].map((n) => <option key={n} value={n}>{n} games</option>)}
-                        </select>
-                    </label>
-                </div>
-            </header>
+function columns(lines: FootballLines, league: string): StatsColumn<Row>[] {
+  const n = (key: "pf" | "pa" | "total", header: string, showFrom?: "lg"): StatsColumn<Row> => ({
+    accessorKey: key,
+    header,
+    cell: ({ getValue }) => fmtNum(getValue()),
+    meta: { showFrom },
+  });
+  return [
+    {
+      accessorKey: "name",
+      header: "Team",
+      meta: { align: "left", sticky: true, className: "min-w-48" },
+      cell: ({ row }) => (
+        <TeamLink sport={SPORT} league={league} teamId={row.original.id} name={row.original.name} />
+      ),
+    },
+    { accessorKey: "gp", header: "GP" },
+    { accessorKey: "record", header: "W–L", enableSorting: false },
+    {
+      accessorKey: "winPct",
+      header: "Win %",
+      cell: ({ getValue }) => (
+        <span className="font-semibold text-ink">{fmtPct(getValue(), 1)}</span>
+      ),
+    },
+    n("pf", "PF"),
+    n("pa", "PA"),
+    {
+      accessorKey: "net",
+      header: "Net",
+      cell: ({ row }) => (
+        <span className={row.original.net > 0 ? "font-semibold text-accent-strong" : undefined}>
+          {fmtSigned(row.original.net)}
+        </span>
+      ),
+    },
+    n("total", "Total", "lg"),
+    ...BETS.map((bet, index): StatsColumn<Row> => ({
+      accessorFn: (row) => row.rates[bet.key] ?? undefined,
+      id: bet.key,
+      header: bet.short(lines[bet.key]),
+      sortUndefined: "last",
+      cell: ({ row }) => <RatePill value={row.original.rates[bet.key]} scale={MARKET_SCALE} />,
+      meta: { showFrom: index === 0 ? undefined : index === 1 ? "lg" : "xl" },
+    })),
+    {
+      id: "form",
+      header: "Last 5",
+      enableSorting: false,
+      cell: ({ row }) => <FormStrip results={row.original.form} />,
+    },
+  ];
+}
 
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface-soft p-4">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted">Lines</span>
-                <FootballLineSelect label="Game total" value={lines.gameTotal} onChange={(n) => setLine("gameTotal", n)} options={ranges(29.5, 69.5)} />
-                <FootballLineSelect label="Team total" value={lines.teamTotal} onChange={(n) => setLine("teamTotal", n)} options={ranges(12.5, 39.5)} />
-                <label className="flex items-center gap-2 text-xs text-muted">
-                    Team spread
-                    <select value={lines.teamSpread} onChange={(e) => setLine("teamSpread", Number(e.target.value))} className="rounded-lg border border-line bg-white px-2 py-2 font-semibold text-ink">
-                        {ranges(-20, 20, 0.5).map((n) => <option key={n} value={n}>{n > 0 ? "+" : ""}{n.toFixed(1)}</option>)}
-                    </select>
-                </label>
-                <label className="flex items-center gap-2 text-xs text-muted">
-                    Opponent spread
-                    <select value={lines.opponentSpread} onChange={(e) => setLine("opponentSpread", Number(e.target.value))} className="rounded-lg border border-line bg-white px-2 py-2 font-semibold text-ink">
-                        {ranges(-20, 20, 0.5).map((n) => <option key={n} value={n}>{n > 0 ? "+" : ""}{n.toFixed(1)}</option>)}
-                    </select>
-                </label>
-                <p className="basis-full text-[11px] text-muted">Line-hit rates recalculate when values change. Pushes do not count toward hit-rate denominators.</p>
-            </div>
+function TeamCard({
+  row,
+  rank,
+  lines,
+  league,
+}: {
+  row: Row;
+  rank: number;
+  lines: FootballLines;
+  league: string;
+}) {
+  return (
+    <article className="rounded-xl border border-line bg-white p-4">
+      <div className="flex items-center gap-3">
+        <TeamBadge name={row.name} size="md" />
+        <div className="min-w-0 flex-1">
+          <TeamLink sport={SPORT} league={league} teamId={row.id} name={row.name} badge={false} />
+          <p className="text-xs text-muted">
+            #{rank} · {row.gp} GP · {row.record}
+          </p>
+        </div>
+        <strong className="stat text-lg text-ink">{fmtPct(row.winPct, 1)}</strong>
+      </div>
+      <div className="mt-3 grid grid-cols-4 gap-2 rounded-lg bg-surface-soft p-3">
+        <MiniStat label="PF" value={fmtNum(row.pf)} />
+        <MiniStat label="PA" value={fmtNum(row.pa)} />
+        <MiniStat label="Net" value={fmtSigned(row.net)} />
+        <MiniStat label={`O${lines.gameTotal}`} value={fmtPct(row.rates.gameTotal)} />
+      </div>
+      <div className="mt-3 flex items-center justify-between border-t border-line-soft pt-3 text-xs text-muted">
+        Last 5 <FormStrip results={row.form} />
+      </div>
+    </article>
+  );
+}
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                {best && <FootballStatCard label="Best record" value={record(best, location)} detail={best.team_name} />}
-                {offense && <FootballStatCard label="Best offense" value={footballNumber(offense[location].points_for_per_game)} detail={`${offense.team_name} · points / game`} />}
-                {defense && <FootballStatCard label="Best defense" value={footballNumber(defense[location].points_against_per_game)} detail={`${defense.team_name} · allowed / game`} />}
-                {totals && <FootballStatCard label="Highest totals" value={footballNumber(totals[location].total_points_per_game)} detail={`${totals.team_name} · combined / game`} />}
-                {topOver && <FootballStatCard label={`Top Over ${lines.gameTotal}`} value={footballPercent(hitRate(topOver, location, "gameTotal", lines.gameTotal))} detail={topOver.team_name} accent />}
-            </div>
+type QuarterRow = {
+  id: number;
+  name: string;
+  cells: { over: number | null; scored: number | null; won: number | null }[];
+};
 
-            <FootballPanel title="All teams">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                    <input
-                        aria-label="Search teams"
-                        value={search}
-                        placeholder="Search teams"
-                        onChange={(event) => { setSearch(event.target.value); setShowAll(false); }}
-                        className="w-56 rounded-lg border border-line bg-white px-3 py-2 text-xs"
-                    />
-                    <div className="flex items-center gap-2 text-[10px] text-muted">
-                        Hit rate <FootballRatePill rate={75} /><FootballRatePill rate={55} /><FootballRatePill rate={40} />
-                    </div>
-                </div>
-                <StatsTable
-                    rows={sorted}
-                    columns={columns}
-                    sportSlug="football"
-                    leagueKey={leagueKey}
-                    badge={(team) => <FootballBadge name={team.team_name} />}
-                    sortKey={sort}
-                    desc={desc}
-                    onSort={(key) => {
-                        if (sort === key) setDesc(!desc);
-                        else { setSort(key); setDesc(true); }
-                    }}
-                    shown={showAll ? sorted.length : 16}
-                    onShowAll={() => setShowAll((previous) => !previous)}
-                />
-                <p className="mt-3 text-[11px] text-muted">
-                    PF / PA = points scored / allowed per game. TO = turnovers per game.
-                </p>
-            </FootballPanel>
+function QuarterTable({ rows, league }: { rows: Row[]; league: string }) {
+  const [line, setLine] = useState(14.5);
+  const data = useMemo<QuarterRow[]>(
+    () =>
+      rows.slice(0, 10).map((row) => ({
+        id: row.id,
+        name: row.name,
+        cells: QUARTERS.map((quarter) => {
+          const scores = row.matches.map((m) => periodScore(m, quarter)).filter((s) => s !== null);
+          const n = scores.length;
+          return {
+            over: n
+              ? (scores.filter((s) => s.team_score + s.opponent_score > line).length / n) * 100
+              : null,
+            scored: average(scores.map((s) => s.team_score)),
+            won: n
+              ? (scores.filter((s) => s.team_score > s.opponent_score).length / n) * 100
+              : null,
+          };
+        }),
+      })),
+    [rows, line],
+  );
+  const columns: StatsColumn<QuarterRow>[] = [
+    {
+      accessorKey: "name",
+      header: "Team",
+      meta: { align: "left", sticky: true, className: "min-w-44" },
+      cell: ({ row }) => (
+        <TeamLink
+          sport={SPORT}
+          league={league}
+          teamId={row.original.id}
+          name={row.original.name}
+          badge={false}
+        />
+      ),
+    },
+    ...QUARTERS.map((quarter, index): StatsColumn<QuarterRow> => ({
+      id: quarter,
+      header: quarter,
+      cell: ({ row }) => {
+        const cell = row.original.cells[index];
+        return (
+          <span className="inline-flex flex-col items-center gap-0.5">
+            <RatePill value={cell.over} scale={MARKET_SCALE} />
+            <span className="text-2xs text-muted">
+              {fmtNum(cell.scored)} pts · won {fmtPct(cell.won)}
+            </span>
+          </span>
+        );
+      },
+    })),
+    {
+      id: "best",
+      header: "Best quarter",
+      cell: ({ row }) => {
+        const index = row.original.cells.indexOf(bestBy(row.original.cells, (cell) => cell.won)!);
+        return index >= 0
+          ? `${QUARTERS[index]} · won ${fmtPct(row.original.cells[index].won)}`
+          : "—";
+      },
+    },
+  ];
+  return (
+    <Section
+      title="Quarter by quarter"
+      description="Share of games over the quarter line, with points scored and quarters won (regulation only, top 10 teams)."
+      actions={
+        <SelectField
+          label="Quarter total"
+          value={line}
+          options={overOptions(range(4.5, 30.5))}
+          onChange={setLine}
+        />
+      }
+    >
+      <DataTable
+        data={data}
+        columns={columns}
+        getRowId={(row) => String(row.id)}
+        sortable={false}
+        minWidth="min-w-[720px]"
+      />
+    </Section>
+  );
+}
 
-            <QuarterOverview teams={sorted} location={location} lastN={lastN} />
-        </main>
+export default function FootballTeamSummary({ league: leagueKey }: { league: string }) {
+  const league = getFootballLeague(leagueKey);
+  const [location, setLocation] = useState<Location>("overall");
+  const [lastN, setLastN] = useState(10);
+  const [lines, setLines] = useState<FootballLines>(INITIAL_LINES);
+  const [conference, setConference] = useState("All");
+
+  const query = useQuery(
+    footballSummaryQuery({
+      league: league ?? {
+        key: leagueKey,
+        label: leagueKey,
+        competitionName: leagueKey,
+        seasonId: null,
+      },
+      location,
+      lastN,
+      lines,
+    }),
+  );
+  const teams = useMemo(() => query.data?.teams ?? [], [query.data]);
+  const conferences = useMemo(() => conferencesOf(teams, leagueKey), [teams, leagueKey]);
+  const rows = useMemo(() => {
+    const filtered = teams.filter(
+      (team) => conference === "All" || teamConference(team, leagueKey) === conference,
     );
+    return toRows(filtered, location, lines);
+  }, [teams, conference, leagueKey, location, lines]);
+  const tableColumns = useMemo(() => columns(lines, leagueKey), [lines, leagueKey]);
+  const setLine = (key: keyof FootballLines) => (value: number) =>
+    setLines((current) => ({ ...current, [key]: value }));
+
+  if (!league) return <EmptyState>Unknown football league: {leagueKey}</EmptyState>;
+
+  const best = bestBy(rows, (row) => row.winPct);
+  const offense = bestBy(rows, (row) => row.pf);
+  const defense = bestBy(rows, (row) => row.pa, true);
+  const totals = bestBy(rows, (row) => row.total);
+  const over = bestBy(rows, (row) => row.rates.gameTotal);
+
+  return (
+    <Page>
+      <PageHeader
+        eyebrow={`${league.label} · Season ${query.data?.competition_season_id ?? league.seasonId ?? "not set"}`}
+        title="Team summary"
+        description={`Scoring, offense and line hit rates for ${teams.length || "all"} teams.`}
+        actions={
+          <>
+            <LocationSwitch value={location} onChange={setLocation} />
+            {conferences.length > 0 && (
+              <SelectField
+                label="Conference"
+                value={conference}
+                options={["All", ...conferences].map((value) => ({ value, label: value }))}
+                onChange={setConference}
+              />
+            )}
+            <SelectField label="Last" value={lastN} options={LAST_N_OPTIONS} onChange={setLastN} />
+          </>
+        }
+      />
+      {league.seasonId == null && (
+        <Notice>Set the {league.label} season ID in your .env file.</Notice>
+      )}
+
+      <Card tone="soft" className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <span className="label-caps">Lines</span>
+        <SelectField
+          label="Game total"
+          value={lines.gameTotal}
+          options={overOptions(range(29.5, 69.5))}
+          onChange={setLine("gameTotal")}
+        />
+        <SelectField
+          label="Team total"
+          value={lines.teamTotal}
+          options={overOptions(range(12.5, 39.5))}
+          onChange={setLine("teamTotal")}
+        />
+        <SelectField
+          label="Team spread"
+          value={lines.teamSpread}
+          options={spreadOptions}
+          onChange={setLine("teamSpread")}
+        />
+        <SelectField
+          label="Opponent spread"
+          value={lines.opponentSpread}
+          options={spreadOptions}
+          onChange={setLine("opponentSpread")}
+        />
+        <Footnote className="basis-full">
+          Hit rates recalculate when lines change. Pushes do not count toward the denominator.
+        </Footnote>
+      </Card>
+
+      <QueryState query={query} loadingLabel="Loading football statistics…">
+        {() => (
+          <>
+            <StatGrid>
+              <StatCard label="Best record" value={best?.record ?? "—"} detail={best?.name} />
+              <StatCard
+                label="Best offense"
+                value={fmtNum(offense?.pf)}
+                detail={offense && `${offense.name} · points / game`}
+              />
+              <StatCard
+                label="Best defense"
+                value={fmtNum(defense?.pa)}
+                detail={defense && `${defense.name} · allowed / game`}
+              />
+              <StatCard
+                label="Highest totals"
+                value={fmtNum(totals?.total)}
+                detail={totals && `${totals.name} · combined / game`}
+              />
+              <StatCard
+                tone="accent"
+                label={`Top Over ${lines.gameTotal}`}
+                value={fmtPct(over?.rates.gameTotal)}
+                detail={over?.name}
+              />
+            </StatGrid>
+
+            <Section title="All teams" actions={<RateLegend scale={MARKET_SCALE} />}>
+              <DataTable
+                key={conference}
+                data={rows}
+                columns={tableColumns}
+                getRowId={(row) => String(row.id)}
+                initialSorting={[{ id: "winPct", desc: true }]}
+                rank
+                pageSize={16}
+                noun="teams"
+                minWidth="min-w-[860px]"
+                label={`${league.label} team summary`}
+                searchText={(row) => row.name}
+                mobileSort={[
+                  { value: "winPct:desc", label: "Highest win %" },
+                  { value: "pf:desc", label: "Most points / game" },
+                  { value: "pa:asc", label: "Fewest allowed / game" },
+                  { value: "gameTotal:desc", label: `Highest Over ${lines.gameTotal}` },
+                ]}
+                renderCard={(row, index) => (
+                  <TeamCard row={row} rank={index + 1} lines={lines} league={leagueKey} />
+                )}
+              />
+              <Footnote>
+                PF / PA = points scored / allowed per game. Wider screens show more line columns.
+              </Footnote>
+            </Section>
+
+            <QuarterTable rows={[...rows].sort((a, b) => b.winPct - a.winPct)} league={leagueKey} />
+          </>
+        )}
+      </QueryState>
+    </Page>
+  );
 }

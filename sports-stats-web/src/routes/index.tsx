@@ -1,29 +1,49 @@
-import {createFileRoute, Link} from "@tanstack/react-router";
-import { sports } from "../config/sports";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Page, PageHeader } from "../component/ui";
+import { getLeagues, sportLanding } from "../config/navigation";
+import { SPORTS } from "../config/sports";
+import { CARD_LINK } from "../lib/styles";
 
 export const Route = createFileRoute("/")({
-    component: HomePage,
+  component: HomePage,
 });
 
 function HomePage() {
-    return (
-        <section>
-            <p className="eyebrow">Sports analytics</p>
-            <h1 className="mt-2">Explore sports statistic</h1>
-            <p className="mt-3 text-lead text-muted">Select a sport to explore leagues, teams, players, and statistical rankings.</p>
-            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {sports.map((sport) => (
-                    <Link
-                        key={sport.slug}
-                        to="/$sport"
-                        params={{ sport: sport.slug }}
-                        className="rounded-xl border border-line p-6 transition-colors hover:border-accent"
-                    >
-                        <h3 className="text-ink">{sport.name}</h3>
-                        <p className="mt-2 text-caption text-muted">{sport.leagues.length} leagues available</p>
-                    </Link>
-                ))}
+  return (
+    <Page>
+      <PageHeader
+        eyebrow="Sports analytics"
+        title="Explore sports statistics"
+        description="Pick a sport to explore leagues, team summaries, rankings and game-by-game trends."
+      />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {SPORTS.map((sport) => {
+          const landing = sportLanding(sport.slug);
+          const count = getLeagues(sport.slug).length;
+          const body = (
+            <>
+              <h2 className="text-h3">{sport.name}</h2>
+              <p className="text-caption text-muted">
+                {count} {count === 1 ? "league" : "leagues"}
+              </p>
+            </>
+          );
+          return landing ? (
+            <Link
+              key={sport.slug}
+              to="/$sport/$league/$section"
+              params={landing}
+              className={CARD_LINK}
+            >
+              {body}
+            </Link>
+          ) : (
+            <div key={sport.slug} className={CARD_LINK}>
+              {body}
             </div>
-        </section>
-    );
+          );
+        })}
+      </div>
+    </Page>
+  );
 }

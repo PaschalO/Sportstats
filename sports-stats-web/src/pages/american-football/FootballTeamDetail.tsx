@@ -1,33 +1,362 @@
 import { useMemo, useState } from "react";
-import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import FootballGameByGame, { FootballMarginAndHalves } from "../../component/american-football/FootballCharts";
-import { FootballBadge, FootballError, FootballLoading, FootballLocationSwitch, FootballPanel, FootballStatCard } from "../../component/american-football/FootballUI";
-import { betSummary, fetchFootballSummary, footballNumber, footballPercent, getFootballLeague, INITIAL_LINES, matchBetResult, orderedMatches, periodScore, teamConference, type FootballBetKind, type FootballLocation, type FootballMatch, type FootballTeam } from "../../services/americanFootballService";
+import { HalvesChart, MarginChart } from "../../component/american-football/FootballCharts";
+import { GameByGame, type GameMetric } from "../../component/charts/GameByGame";
+import { DataTable } from "../../component/table/DataTable";
+import {
+  Breadcrumbs,
+  Card,
+  EmptyState,
+  LocationSwitch,
+  Notice,
+  Page,
+  PageHeader,
+  QueryState,
+  ResultBadge,
+  Section,
+  StatStrip,
+  TeamBadge,
+} from "../../component/ui";
+import { cn } from "../../lib/cn";
+import { byNewest, fmtDate, fmtNum, fmtPct, fmtSigned, venuePrefix } from "../../lib/format";
+import { resultTone } from "../../lib/results";
+import type { StatsColumn } from "../../lib/table";
+import type { Location } from "../../lib/types";
+import {
+  betSummary,
+  footballSummaryQuery,
+  getFootballLeague,
+  INITIAL_LINES,
+  matchBetResult,
+  periodScore,
+  teamConference,
+  type FootballMatch,
+  type FootballPeriodKey,
+  type FootballSplit,
+} from "../../services/americanFootballService";
+import { BETS, record, signedLine, SPORT } from "./football";
 
-const BETS:{key:FootballBetKind;label:string;line:number;display:string}[]=[
-    {key:"gameTotal",label:"Game total",line:47.5,display:"Over 47.5"},
-    {key:"teamTotal",label:"Team total",line:24.5,display:"Over 24.5"},
-    {key:"teamSpread",label:"Spread",line:-5,display:"Team −5"},
-    {key:"opponentSpread",label:"Opponent spread",line:10,display:"Opp +10"},
+const periodTotal = (key: FootballPeriodKey) => (m: FootballMatch) => {
+  const score = periodScore(m, key);
+  return score ? score.team_score + score.opponent_score : null;
+};
+
+const METRICS: GameMetric<FootballMatch>[] = [
+  { key: "total", label: "Total points", line: 47.5, value: (m) => m.total_points },
+  { key: "team", label: "Team points", line: 24.5, value: (m) => m.team_score },
+  { key: "opponent", label: "Opp points", line: 22.5, value: (m) => m.opponent_score },
+  { key: "1H", label: "1st half", line: 23.5, value: periodTotal("1H") },
+  { key: "2H", label: "2nd half", line: 23.5, value: periodTotal("2H") },
+  ...(["Q1", "Q2", "Q3", "Q4"] as const).map((key) => ({
+    key,
+    label: key,
+    line: 11.5,
+    value: periodTotal(key),
+  })),
 ];
-function BettingTiles({matches}:{matches:FootballMatch[]}) {const [expanded,setExpanded]=useState(false);return <FootballPanel title="Betting lines" description="Hit rates at each line, broken down by home and away. Pushes are excluded from the denominator."><div className="mb-3 flex justify-end"><button className="text-xs font-semibold text-accent-strong" onClick={()=>setExpanded(e=>!e)}>{expanded?"Hide breakdown":"Show breakdown"}</button></div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{BETS.map(b=>{const summary=betSummary(matches,b.key,b.line),home=betSummary(matches.filter(m=>m.location==="home"),b.key,b.line),away=betSummary(matches.filter(m=>m.location==="away"),b.key,b.line);return <div key={b.key} className="rounded-xl border border-line bg-white p-4"><div className="flex justify-between text-[11px] text-muted"><strong className="text-ink">{b.label}</strong><span>{b.display}</span></div><p className="mt-3 text-2xl font-bold">{footballPercent(summary.pct)}</p><p className="text-[11px] text-muted">{summary.hits} of {summary.available-summary.pushes} decisive games{summary.pushes?` · ${summary.pushes} push${summary.pushes===1?"":"es"}`:""}</p><div className="mt-3 flex gap-1">{summary.results.map((r,i)=><span key={i} className={`h-2 flex-1 rounded-sm ${r==="hit"?"bg-accent":r==="push"?"border border-line-strong bg-white":"bg-line-strong"}`} />)}</div><p className="mt-3 text-[11px] text-muted">Home <b>{home.hits}/{home.available-home.pushes}</b> · Away <b>{away.hits}/{away.available-away.pushes}</b></p>{expanded&&<p className="mt-2 text-xs text-muted">{summary.misses} misses · {summary.pushes} pushes</p>}</div>})}</div></FootballPanel>}
-function HomeAwayTable({team}:{team:FootballTeam}) {return <FootballPanel title="Home vs away"><div className="overflow-x-auto rounded-xl border border-line bg-white"><table className="w-full min-w-[700px] text-xs"><thead className="bg-surface-soft text-[10px] text-muted"><tr>{["Split","GP","W–L","PF","PA","TOTAL","PASS YDS","RUSH YDS","O47.5","TEAM O24.5","COVER −5"].map(h=><th key={h} className="px-3 py-3 text-left">{h}</th>)}</tr></thead><tbody>{(["home","away"] as const).map(loc=>{const s=team[loc],m=s.matches;return <tr key={loc} className="border-t border-line-soft"><td className="px-3 py-3 font-semibold capitalize">{loc}</td><td className="px-3 py-3">{s.games_played}</td><td className="px-3 py-3">{s.wins}–{s.losses}</td><td className="px-3 py-3 text-accent-strong">{footballNumber(s.points_for_per_game)}</td><td className="px-3 py-3">{footballNumber(s.points_against_per_game)}</td><td className="px-3 py-3">{footballNumber(s.total_points_per_game)}</td><td className="px-3 py-3">{footballNumber(s.passing_yards_per_game)}</td><td className="px-3 py-3">{footballNumber(s.rushing_yards_per_game)}</td><td className="px-3 py-3">{betSummary(m,"gameTotal",47.5).hits}/{m.length}</td><td className="px-3 py-3">{betSummary(m,"teamTotal",24.5).hits}/{m.length}</td><td className="px-3 py-3">{betSummary(m,"teamSpread",-5).hits}/{m.length}</td></tr>})}</tbody></table></div></FootballPanel>}
-function MatchLog({matches}:{matches:FootballMatch[]}) {const [shown,setShown]=useState(10);return <FootballPanel title="Match log" description="Quarter scores are team–opponent; OT is not included in Q4."><div className="overflow-x-auto rounded-xl border border-line bg-white"><table className="w-full min-w-[900px] text-left text-[11px]"><thead className="bg-surface-soft text-[10px] text-muted"><tr>{["Date","Opponent","Result","Q1","Q2","Q3","Q4","Total","O47.5","TT O24.5","Cover −5","Opp +10"].map(h=><th className="px-3 py-3" key={h}>{h}</th>)}</tr></thead><tbody>{matches.slice(0,shown).map(m=><tr className="border-t border-line-soft" key={m.game_pk}><td className="whitespace-nowrap px-3 py-3">{m.game_date}</td><td className="whitespace-nowrap px-3 py-3 font-semibold">{m.location==="home"?"vs":"@"} {m.opponent_name}</td><td className="whitespace-nowrap px-3 py-3"><span className={`mr-2 rounded px-1.5 py-1 font-bold ${m.result==="W"?"bg-ink text-white":"bg-surface text-muted"}`}>{m.result}</span>{m.score_line}</td>{(["Q1","Q2","Q3","Q4"] as const).map(p=>{const s=periodScore(m,p);return <td className="whitespace-nowrap px-3 py-3" key={p}><span className={`rounded px-2 py-1 ${s&&s.team_score>s.opponent_score?"bg-accent-soft text-accent-strong":"bg-surface text-ink-soft"}`}>{s?`${s.team_score}–${s.opponent_score}`:"—"}</span></td>})}<td className="px-3 py-3 font-semibold">{m.total_points}</td>{BETS.map(b=>{const result=matchBetResult(m,b.key,b.line);return <td className="px-3 py-3" key={b.key}><span className={`inline-flex min-w-12 justify-center rounded px-1.5 py-1 text-[10px] font-semibold ${result==="hit"?"bg-accent text-white":result==="push"?"border border-line bg-white text-muted":"bg-surface text-muted"}`}>{result==="hit"?"Hit":result==="push"?"Push":"Miss"}</span></td>})}</tr>)}</tbody></table></div>{shown<matches.length&&<button onClick={()=>setShown(n=>n+10)} className="mt-3 rounded-lg border border-line px-3 py-2 text-xs font-semibold text-accent-strong">Show more ({shown} of {matches.length})</button>}</FootballPanel>}
-export default function FootballTeamDetail({leagueKey,teamId}:{leagueKey:string;teamId:string}) {
-    const league=getFootballLeague(leagueKey);const [location,setLocation]=useState<FootballLocation>("overall");
-    const query=useQuery({queryKey:["football","summary","detail",leagueKey,league?.seasonId],queryFn:({signal})=>fetchFootballSummary({league:league!,location:"overall",lastN:100,lines:INITIAL_LINES},signal),enabled:!!league?.seasonId,staleTime:60000,retry:1});
-    const team=query.data?.teams.find(t=>String(t.team_pk)===String(teamId));
-    const stats=team?.[location];
-    const matches=useMemo(()=>orderedMatches(stats?.matches),[stats]);
-    if(!league)return <FootballError message={`Unknown football league: ${leagueKey}`}/>;
-    if(!league.seasonId)return <FootballError message={`Set the season ID for ${league.label} in .env.`}/>;
-    if(query.isPending)return <FootballLoading/>;
-    if(query.isError)return <FootballError message={query.error.message} retry={()=>void query.refetch()}/>;
-    if(!team||!stats)return <FootballError message={`Team ID ${teamId} was not returned for ${league.label}.`}/>;
-    const net=stats.points_for_per_game-stats.points_against_per_game;
-    return <main className="w-full min-w-0 space-y-7 pb-12"><nav className="text-xs text-muted"><Link to="/$sport/$league/$section" params={{sport:"football",league:leagueKey,section:"team-summary"}} className="text-accent-strong hover:underline">{league.label} / Team summary</Link> / {team.team_name}</nav>
-        <header className="flex flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><FootballBadge name={team.team_name}/><div><h1 className="text-3xl font-bold text-ink">{team.team_name}</h1><p className="mt-1 text-xs text-muted">{stats.wins}–{stats.losses}{stats.ties?`–${stats.ties}`:""} record · {footballPercent(stats.win_pct,1)} wins · last {stats.games_played} games{teamConference(team,leagueKey)?` · ${teamConference(team,leagueKey)}`:""}</p></div></div><FootballLocationSwitch value={location} onChange={setLocation}/></header>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"><FootballStatCard label="Points / game" value={footballNumber(stats.points_for_per_game)} detail={`${footballNumber(stats.points_against_per_game)} allowed`}/><FootballStatCard label="Net margin" value={`${net>=0?"+":""}${footballNumber(net)}`} detail="per game"/><FootballStatCard label="Total points / game" value={footballNumber(stats.total_points_per_game)} detail="both teams combined" accent/><FootballStatCard label="Passing yards" value={footballNumber(stats.passing_yards_per_game)} detail={`${footballNumber(stats.passing_touchdowns_per_game)} passing TDs`}/><FootballStatCard label="Rushing yards" value={footballNumber(stats.rushing_yards_per_game)} detail="per game"/><FootballStatCard label="Turnovers" value={footballNumber(stats.turnovers_per_game,2)} detail={`${footballNumber(stats.interceptions_per_game,2)} interceptions`}/></div>
-        <BettingTiles matches={matches}/><FootballGameByGame key={`${leagueKey}-${teamId}-${location}`} matches={matches} teamName={team.team_name}/><FootballMarginAndHalves matches={matches}/><HomeAwayTable team={team}/><MatchLog key={`${teamId}-${location}`} matches={matches}/></main>;
+
+const LINES = INITIAL_LINES;
+const BET_TONES = {
+  hit: "bg-accent text-white",
+  push: "border border-line text-muted",
+  miss: "bg-surface text-muted",
+} as const;
+
+function BettingLines({ matches }: { matches: FootballMatch[] }) {
+  return (
+    <Section
+      title="Betting lines"
+      description="Hit rate at each line, split by home and away. Pushes are left out of the denominator."
+    >
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {BETS.map((bet) => {
+          const line = LINES[bet.key];
+          const all = betSummary(matches, bet.key, line);
+          const home = betSummary(
+            matches.filter((m) => m.location === "home"),
+            bet.key,
+            line,
+          );
+          const away = betSummary(
+            matches.filter((m) => m.location === "away"),
+            bet.key,
+            line,
+          );
+          return (
+            <Card key={bet.key} as="article">
+              <div className="flex justify-between gap-2 text-xs">
+                <span className="font-semibold text-ink">{bet.label}</span>
+                <span className="text-muted">
+                  {bet.key.endsWith("Spread") ? signedLine(line) : `Over ${line}`}
+                </span>
+              </div>
+              <p className="stat mt-2 text-stat text-ink">{fmtPct(all.pct)}</p>
+              <p className="text-xs text-muted">
+                {all.hits} of {all.decided} decided
+                {all.pushes ? ` · ${all.pushes} push${all.pushes === 1 ? "" : "es"}` : ""}
+              </p>
+              <div className="mt-3 flex gap-0.5" aria-hidden="true">
+                {[...all.results].reverse().map((result, index) => (
+                  <span key={index} className={cn("h-2 flex-1 rounded-sm", BET_TONES[result])} />
+                ))}
+              </div>
+              <p className="mt-3 text-xs text-muted">
+                Home{" "}
+                <b className="text-ink">
+                  {home.hits}/{home.decided}
+                </b>{" "}
+                · Away{" "}
+                <b className="text-ink">
+                  {away.hits}/{away.decided}
+                </b>
+              </p>
+            </Card>
+          );
+        })}
+      </div>
+    </Section>
+  );
+}
+
+type SplitRow = { split: string; s: FootballSplit };
+
+const SPLIT_COLUMNS: StatsColumn<SplitRow>[] = [
+  {
+    accessorKey: "split",
+    header: "Split",
+    meta: { align: "left" },
+    cell: ({ getValue }) => (
+      <span className="font-semibold text-ink capitalize">{String(getValue())}</span>
+    ),
+  },
+  { id: "gp", header: "GP", cell: ({ row }) => row.original.s.games_played },
+  { id: "record", header: "W–L", cell: ({ row }) => record(row.original.s) },
+  {
+    id: "pf",
+    header: "PF",
+    cell: ({ row }) => (
+      <span className="text-accent-strong">{fmtNum(row.original.s.points_for_per_game)}</span>
+    ),
+  },
+  { id: "pa", header: "PA", cell: ({ row }) => fmtNum(row.original.s.points_against_per_game) },
+  { id: "total", header: "Total", cell: ({ row }) => fmtNum(row.original.s.total_points_per_game) },
+  {
+    id: "pass",
+    header: "Pass yds",
+    cell: ({ row }) => fmtNum(row.original.s.passing_yards_per_game),
+  },
+  {
+    id: "rush",
+    header: "Rush yds",
+    cell: ({ row }) => fmtNum(row.original.s.rushing_yards_per_game),
+  },
+  ...BETS.slice(0, 3).map((bet): StatsColumn<SplitRow> => ({
+    id: bet.key,
+    header: bet.short(LINES[bet.key]),
+    cell: ({ row }) => {
+      const summary = betSummary(row.original.s.matches, bet.key, LINES[bet.key]);
+      return `${summary.hits}/${summary.decided}`;
+    },
+  })),
+];
+
+const LOG_COLUMNS: StatsColumn<FootballMatch>[] = [
+  {
+    accessorKey: "game_date",
+    header: "Date",
+    meta: { align: "left" },
+    cell: ({ getValue }) => <span className="text-muted">{fmtDate(String(getValue()))}</span>,
+  },
+  {
+    accessorKey: "opponent_name",
+    header: "Opponent",
+    meta: { align: "left" },
+    cell: ({ row }) => (
+      <span className="font-semibold text-ink">
+        <span className="mr-1.5 font-normal text-muted">{venuePrefix(row.original.location)}</span>
+        {row.original.opponent_name}
+      </span>
+    ),
+  },
+  {
+    id: "result",
+    header: "Result",
+    meta: { align: "left" },
+    cell: ({ row }) => (
+      <span className="inline-flex items-center gap-1.5">
+        <ResultBadge label={row.original.result} tone={resultTone(row.original.result)} />
+        <span className="font-semibold text-ink">{row.original.score_line}</span>
+      </span>
+    ),
+  },
+  ...(["Q1", "Q2", "Q3", "Q4"] as const).map((key): StatsColumn<FootballMatch> => ({
+    id: key,
+    header: key,
+    cell: ({ row }) => {
+      const s = periodScore(row.original, key);
+      return s ? (
+        <span
+          className={cn(
+            "pill min-w-12",
+            s.team_score > s.opponent_score
+              ? "bg-accent-soft text-accent-strong"
+              : "bg-surface text-ink-soft",
+          )}
+        >
+          {s.team_score}–{s.opponent_score}
+        </span>
+      ) : (
+        "—"
+      );
+    },
+  })),
+  {
+    accessorKey: "total_points",
+    header: "Total",
+    cell: ({ getValue }) => <span className="font-semibold text-ink">{String(getValue())}</span>,
+  },
+  ...BETS.map((bet): StatsColumn<FootballMatch> => ({
+    id: bet.key,
+    header: bet.short(LINES[bet.key]),
+    cell: ({ row }) => {
+      const result = matchBetResult(row.original, bet.key, LINES[bet.key]);
+      return <span className={cn("pill min-w-12 capitalize", BET_TONES[result])}>{result}</span>;
+    },
+  })),
+];
+
+export default function FootballTeamDetail({
+  league: leagueKey,
+  teamId,
+}: {
+  league: string;
+  teamId: string;
+}) {
+  const league = getFootballLeague(leagueKey) ?? {
+    key: leagueKey,
+    label: leagueKey,
+    competitionName: leagueKey,
+    seasonId: null,
+  };
+  const [location, setLocation] = useState<Location>("overall");
+  const query = useQuery(
+    footballSummaryQuery({ league, location: "overall", lastN: 100, lines: INITIAL_LINES }),
+  );
+  const team = query.data?.teams.find((item) => String(item.team_pk) === teamId);
+  const stats = team?.[location];
+  const matches = useMemo(() => byNewest(stats?.matches), [stats]);
+
+  return (
+    <Page>
+      <Breadcrumbs
+        sport={SPORT}
+        league={leagueKey}
+        items={[
+          { label: league.label },
+          { label: "Team summary", section: "team-summary" },
+          { label: team?.team_name ?? `Team ${teamId}` },
+        ]}
+      />
+      {league.seasonId == null && (
+        <Notice>Set the {league.label} season ID in your .env file.</Notice>
+      )}
+      <QueryState query={query} loadingLabel="Loading team…">
+        {() =>
+          !team || !stats ? (
+            <EmptyState>
+              Team ID {teamId} was not returned for {league.label}.
+            </EmptyState>
+          ) : (
+            <>
+              <PageHeader
+                leading={<TeamBadge name={team.team_name} size="lg" />}
+                eyebrow={[league.label, teamConference(team, leagueKey)]
+                  .filter(Boolean)
+                  .join(" · ")}
+                title={team.team_name}
+                meta={`${record(stats)} record · ${fmtPct(stats.win_pct, 1)} wins · last ${stats.games_played} games`}
+                actions={<LocationSwitch value={location} onChange={setLocation} />}
+              />
+              <StatStrip
+                className="md:grid-cols-3 xl:grid-cols-6"
+                items={[
+                  {
+                    label: "Points / game",
+                    value: fmtNum(stats.points_for_per_game),
+                    detail: `${fmtNum(stats.points_against_per_game)} allowed`,
+                  },
+                  {
+                    label: "Net margin",
+                    value: fmtSigned(stats.points_for_per_game - stats.points_against_per_game),
+                    detail: "per game",
+                  },
+                  {
+                    label: "Total points / game",
+                    value: fmtNum(stats.total_points_per_game),
+                    detail: "both teams",
+                    accent: true,
+                  },
+                  {
+                    label: "Passing yards",
+                    value: fmtNum(stats.passing_yards_per_game),
+                    detail: `${fmtNum(stats.passing_touchdowns_per_game)} passing TDs`,
+                  },
+                  {
+                    label: "Rushing yards",
+                    value: fmtNum(stats.rushing_yards_per_game),
+                    detail: "per game",
+                  },
+                  {
+                    label: "Turnovers",
+                    value: fmtNum(stats.turnovers_per_game, 2),
+                    detail: `${fmtNum(stats.interceptions_per_game, 2)} interceptions`,
+                  },
+                ]}
+              />
+              <BettingLines matches={matches} />
+              <GameByGame
+                key={location}
+                matches={matches}
+                metrics={METRICS}
+                windows={[3, 5, 10, "season"]}
+                defaultWindow="season"
+              />
+              <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+                <MarginChart matches={matches} />
+                <HalvesChart matches={matches} />
+              </div>
+              <Section title="Home vs away">
+                <DataTable
+                  data={[
+                    { split: "home", s: team.home },
+                    { split: "away", s: team.away },
+                  ]}
+                  columns={SPLIT_COLUMNS}
+                  getRowId={(row) => row.split}
+                  sortable={false}
+                  minWidth="min-w-[760px]"
+                />
+              </Section>
+              <Section
+                title="Match log"
+                description="Quarter scores are team–opponent; OT is not included in Q4."
+              >
+                <DataTable
+                  key={location}
+                  data={matches}
+                  columns={LOG_COLUMNS}
+                  getRowId={(m) => String(m.game_pk)}
+                  sortable={false}
+                  pageSize={10}
+                  pageStep={10}
+                  noun="games"
+                  minWidth="min-w-[980px]"
+                />
+              </Section>
+            </>
+          )
+        }
+      </QueryState>
+    </Page>
+  );
 }

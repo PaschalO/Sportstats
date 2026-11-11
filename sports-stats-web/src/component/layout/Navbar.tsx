@@ -1,62 +1,104 @@
-import { Link, useLocation } from "@tanstack/react-router";
-import { sports } from "../../config/sports";
-import { getNavLeagueGroups, getNavTargetSection } from "../../config/navigation";
+import { Link, useParams } from "@tanstack/react-router";
+import { cn } from "../../lib/cn";
+import { getSections, sportLanding } from "../../config/navigation";
+import { SPORTS } from "../../config/sports";
 
-type Props = { size?: number };
+function Logo() {
+  return (
+    <Link to="/" className="flex shrink-0 items-center gap-2 py-3 text-ink">
+      <svg width={28} height={28} viewBox="0 0 30 30" aria-hidden="true">
+        <rect width="30" height="30" rx="8" fill="#0B1220" />
+        <g
+          transform="translate(7 7) scale(0.6667)"
+          fill="none"
+          stroke="#FFFFFF"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+        >
+          <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+        </g>
+      </svg>
+      <span className="font-display text-lg font-bold tracking-tight">SportsStats</span>
+    </Link>
+  );
+}
 
-/**
- * Sport links open the first configured competition's statistics page directly.
- * This bypasses the redundant "Select a league" cards.
- * Leagues/competitions remain selectable through the shared LeagueNavbar.
- */
-export default function Navbar({ size = 30 }: Props) {
-    const { pathname } = useLocation();
-    const activeSport = pathname.split("/")[1];
+function SectionLinks({ className }: { className?: string }) {
+  const { sport = "", league = "", section } = useParams({ strict: false });
+  const sections = getSections(sport);
+  if (!league || !sections.length) return null;
+  return (
+    <nav
+      aria-label="Statistics sections"
+      className={cn("scrollbar-none flex gap-5 overflow-x-auto", className)}
+    >
+      {sections.map((item) => {
+        const active = item.slug === section;
+        return (
+          <Link
+            key={item.slug}
+            to="/$sport/$league/$section"
+            params={{ sport, league, section: item.slug }}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "shrink-0 border-b-2 py-3 text-caption font-medium transition-colors",
+              active ? "border-accent text-ink" : "border-transparent text-muted hover:text-ink",
+            )}
+          >
+            {item.name}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
 
-    return (
-        <header className="border-b border-line bg-white">
-            <nav aria-label="Sports navigation" className="page flex min-h-16 items-center gap-6">
-                <Link to="/" className="flex shrink-0 items-center gap-2 text-ink!">
-                    <svg width={size} height={size} viewBox="0 0 30 30" aria-hidden="true">
-                        <rect width="30" height="30" rx="8" fill="#0B1220" />
-                        <g transform="translate(7 7) scale(0.6667)" fill="none" stroke="#FFFFFF" strokeWidth="2.4" strokeLinecap="round">
-                            <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
-                        </g>
-                    </svg>
-                    <span className="font-display font-bold text-lg tracking-tight">SportsStats</span>
-                </Link>
-                <div className="flex min-w-0 gap-2 overflow-x-auto py-2">
-                    {sports.map((sport) => {
-                        const isActive = activeSport === sport.slug;
-                        const firstLeague = getNavLeagueGroups(sport.slug).flatMap((group) => group.leagues)[0]?.slug;
-                        const className = `shrink-0 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                            isActive ? "bg-ink text-white!" : "text-muted! hover:bg-surface hover:text-ink!"
-                        }`;
-                        if (!firstLeague) {
-                            return (
-                                <Link key={sport.slug} to="/$sport" params={{ sport: sport.slug }} aria-current={isActive ? "page" : undefined} className={className}>
-                                    {sport.name}
-                                </Link>
-                            );
-                        }
-                        return (
-                            <Link
-                                key={sport.slug}
-                                to="/$sport/$league/$section"
-                                params={{
-                                    sport: sport.slug,
-                                    league: firstLeague,
-                                    section: getNavTargetSection(sport.slug, firstLeague, "team-summary"),
-                                }}
-                                aria-current={isActive ? "page" : undefined}
-                                className={className}
-                            >
-                                {sport.name}
-                            </Link>
-                        );
-                    })}
-                </div>
-            </nav>
-        </header>
-    );
+/** Logo, sport tabs and (on wide screens) section tabs in one row, as in the mockup. */
+export default function Navbar() {
+  const { sport: activeSport, section } = useParams({ strict: false });
+
+  return (
+    <header className="border-b border-line bg-white">
+      <div className="page flex items-center gap-4 lg:gap-8">
+        <Logo />
+        <nav
+          aria-label="Sports"
+          className="scrollbar-none flex min-w-0 flex-1 gap-1 overflow-x-auto py-2"
+        >
+          {SPORTS.map((sport) => {
+            const active = sport.slug === activeSport;
+            const landing = sportLanding(sport.slug, section);
+            const className = cn(
+              "shrink-0 rounded-md px-3 py-1.5 text-caption font-medium transition-colors",
+              active ? "bg-ink text-white" : "text-muted hover:bg-surface hover:text-ink",
+            );
+            return landing ? (
+              <Link
+                key={sport.slug}
+                to="/$sport/$league/$section"
+                params={landing}
+                aria-current={active ? "page" : undefined}
+                className={className}
+              >
+                {sport.name}
+              </Link>
+            ) : (
+              <Link
+                key={sport.slug}
+                to="/$sport"
+                params={{ sport: sport.slug }}
+                className={className}
+              >
+                {sport.name}
+              </Link>
+            );
+          })}
+        </nav>
+        <SectionLinks className="hidden self-stretch xl:flex" />
+      </div>
+      <div className="page border-t border-line-soft xl:hidden">
+        <SectionLinks />
+      </div>
+    </header>
+  );
 }

@@ -1,207 +1,197 @@
 /* Fonts must be imported before Tailwind */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap");
 @import "tailwindcss";
 
 /* =========================================================
-   1. DESIGN TOKENS
-   Each variable becomes Tailwind classes automatically:
-   --color-ink  -> bg-ink, text-ink, border-ink
-   --text-h1    -> text-h1
-   Sizes are in rem (1rem = 16px) so they grow if a user
-   turns up their browser's text size.
+   1. DESIGN TOKENS (taken from the Sports Stats mockup)
+   Every variable becomes a Tailwind class:
+   --color-ink -> bg-ink / text-ink, --text-h1 -> text-h1.
+   Sizes are rem so they respect the browser's text size.
    ========================================================= */
 @theme {
-    /* ---------- Fonts ---------- */
-    --font-sans: "Inter", system-ui, sans-serif;          /* body text, tables, buttons */
-    --font-display: "Space Grotesk", "Inter", sans-serif; /* headings and big numbers */
+  /* Fonts: Space Grotesk for headings and big numbers, Inter for everything else */
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Inter", sans-serif;
 
-    /* ---------- Type scale ----------
-       Tailwind's own text-xs (12px), text-sm (14px) and text-lg (18px)
-       still work. These fill the gaps the mockup uses. */
-    --text-label: 0.75rem;                   /* 12px - uppercase table headers */
-    --text-label--line-height: 1.3;
-    --text-label--letter-spacing: 0.04em;
+  /* Type scale */
+  --text-2xs: 0.6875rem; /* 11px - pill sub-labels, chart notes */
+  --text-2xs--line-height: 1.4;
 
-    --text-caption: 0.8125rem;               /* 13px - hints, sub-labels, legends */
-    --text-caption--line-height: 1.5;
+  --text-label: 0.6875rem; /* 11px - uppercase table headers */
+  --text-label--line-height: 1.3;
+  --text-label--letter-spacing: 0.06em;
 
-    --text-body: 0.9375rem;                  /* 15px - normal paragraph text */
-    --text-body--line-height: 1.6;
+  --text-caption: 0.8125rem; /* 13px - table cells, hints, legends */
+  --text-caption--line-height: 1.5;
 
-    --text-lead: 1rem;                       /* 16px - intro sentence under a page title */
-    --text-lead--line-height: 1.6;
+  --text-body: 0.9375rem; /* 15px - paragraphs, page intro */
+  --text-body--line-height: 1.6;
 
-    --text-h3: 1.25rem;                      /* 20px - card titles */
-    --text-h3--line-height: 1.3;
-    --text-h3--letter-spacing: -0.01em;
+  --text-h3: 1.0625rem; /* 17px - card titles */
+  --text-h3--line-height: 1.35;
+  --text-h3--letter-spacing: -0.01em;
 
-    --text-h2: 1.5rem;                       /* 24px - section titles */
-    --text-h2--line-height: 1.25;
-    --text-h2--letter-spacing: -0.01em;
+  --text-h2: 1.375rem; /* 22px - section titles */
+  --text-h2--line-height: 1.25;
+  --text-h2--letter-spacing: -0.01em;
 
-    --text-stat: 1.875rem;                   /* 30px - big KPI numbers */
-    --text-stat--line-height: 1.15;
-    --text-stat--letter-spacing: -0.02em;
+  --text-stat: 1.875rem; /* 30px - KPI numbers */
+  --text-stat--line-height: 1.15;
+  --text-stat--letter-spacing: -0.02em;
 
-    --text-h1: 2.75rem;                      /* 44px - page title (desktop) */
-    --text-h1--line-height: 1.1;
-    --text-h1--letter-spacing: -0.02em;
+  --text-h1: 2.75rem; /* 44px - page title on desktop */
+  --text-h1--line-height: 1.1;
+  --text-h1--letter-spacing: -0.02em;
 
-    /* ---------- Colours ---------- */
-    /* Text */
-    --color-ink: #0B1220;          /* main text, dark buttons, Win pills */
-    --color-ink-soft: #3B4352;     /* secondary body text */
-    --color-muted: #5B6474;        /* labels, captions, inactive links */
-    --color-faint: #8A93A3;        /* chart axis numbers only (too light for real text) */
+  /* Text */
+  --color-ink: #0b1220;
+  --color-ink-soft: #3b4352;
+  --color-muted: #5b6474;
+  --color-faint: #8a93a3;
 
-    /* Lines and surfaces */
-    --color-line: #E6E8EC;         /* card borders, header divider */
-    --color-line-soft: #EEF0F3;    /* dividers inside cards, chart gridlines */
-    --color-line-strong: #D5D9E0;  /* inputs, Loss pill outline */
-    --color-surface: #F1F3F7;      /* segmented control, empty bars */
-    --color-surface-soft: #FAFBFC; /* "What stands out" panel */
+  /* Lines and surfaces */
+  --color-line: #e6e8ec;
+  --color-line-soft: #eef0f3;
+  --color-line-strong: #d5d9e0;
+  --color-surface: #f1f3f7;
+  --color-surface-soft: #fafbfc;
 
-    /* Accent blue */
-    --color-accent: #1F4FE0;       /* links, active underline, your team's bars */
-    --color-accent-strong: #1739A8;/* link hover, highlighted numbers */
-    --color-accent-mid: #9DB5F7;   /* xG bars */
-    --color-accent-soft: #DCE5FD;  /* rank bands, highlighted card border */
-    --color-accent-tint: #F5F8FF;  /* highlighted card background */
+  /* Accent blue */
+  --color-accent: #1f4fe0;
+  --color-accent-strong: #1739a8;
+  --color-accent-mid: #9db5f7;
+  --color-accent-soft: #dce5fd;
+  --color-accent-tint: #f5f8ff;
 
-    /* Other */
-    --color-opponent: #E8833A;     /* opponent bars, missing-data dots */
-    --color-danger: #C2410C;       /* red cards */
-    --color-row-hover: #F7F9FD;
+  /* Other */
+  --color-opponent: #e8833a;
+  --color-danger: #c2410c;
+  --color-row-hover: #f7f9fd;
 
-    /* Page width */
-    --container-page: 85rem;       /* 1360px */
+  --container-page: 85rem; /* 1360px */
 }
 
 /* =========================================================
    2. BASE STYLES
-   What plain HTML elements look like before you add classes.
-   Tailwind's reset ("preflight") already sets every margin to 0,
-   so spacing comes from gap-* on the parent, the same as in the mockup.
    ========================================================= */
 @layer base {
-    /* Leave the root at the browser default (16px).
-       Changing it would shift every rem value above. */
+  body {
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    color: var(--color-ink);
+    background: #ffffff;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-    body {
-        font-family: var(--font-sans);
-        font-size: var(--text-body);
-        line-height: var(--text-body--line-height);
-        color: var(--color-ink);
-        background: #FFFFFF;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-    }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    color: var(--color-ink);
+    text-wrap: balance;
+  }
 
-    h1, h2, h3 {
-        font-family: var(--font-display);
-        font-weight: 600;
-        text-wrap: balance;        /* avoids one lonely word on the last line */
+  /* 30px phones, 36px tablets, 44px desktop */
+  h1 {
+    font-size: 1.875rem;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    @variant sm {
+      font-size: 2.25rem;
     }
+    @variant lg {
+      font-size: var(--text-h1);
+      line-height: var(--text-h1--line-height);
+    }
+  }
 
-    /* h1 starts smaller on phones and grows on desktop */
-    h1 {
-        font-size: 2rem;                 /* 32px on phones */
-        line-height: 1.15;
-        letter-spacing: -0.02em;
-        @variant lg {
-            font-size: var(--text-h1);   /* 44px from 1024px up */
-            line-height: var(--text-h1--line-height);
-        }
-    }
+  h2 {
+    font-size: var(--text-h2);
+    line-height: var(--text-h2--line-height);
+    letter-spacing: var(--text-h2--letter-spacing);
+  }
 
-    h2 {
-        font-size: var(--text-h2);
-        line-height: var(--text-h2--line-height);
-        letter-spacing: var(--text-h2--letter-spacing);
-    }
+  h3 {
+    font-size: var(--text-h3);
+    line-height: var(--text-h3--line-height);
+    letter-spacing: var(--text-h3--letter-spacing);
+  }
 
-    h3 {
-        font-size: var(--text-h3);
-        line-height: var(--text-h3--line-height);
-        letter-spacing: var(--text-h3--letter-spacing);
-    }
+  a {
+    text-decoration: none;
+  }
 
-    a {
-        /*color: var(--color-accent);*/
-        text-decoration: none;
-    }
-    /*
-    a:hover {
-        color: var(--color-accent-strong);
-    }
-    */
-
-    /* Visible keyboard focus everywhere */
-    :focus-visible {
-        outline: 2px solid var(--color-accent);
-        outline-offset: 2px;
-        border-radius: 4px;
-    }
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
 }
 
 /* =========================================================
-   3. REUSABLE CLASSES
-   Patterns the mockup repeats on every screen.
+   3. REUSABLE UTILITIES
    ========================================================= */
 
-/* Centred page column with side padding that grows with the screen.
-   Use on the header's inner div and on <main>. */
+/* Centred page column; side padding grows with the screen */
 @utility page {
-    width: 100%;
-    max-width: var(--container-page);
-    margin-inline: auto;
-    padding-inline: 1rem;        /* 16px phones */
-    @variant sm {
-        padding-inline: 1.5rem;    /* 24px tablets */
-    }
-    @variant lg {
-        padding-inline: 2.5rem;    /* 40px desktop */
-    }
+  width: 100%;
+  max-width: var(--container-page);
+  margin-inline: auto;
+  padding-inline: 1rem;
+  @variant sm {
+    padding-inline: 1.5rem;
+  }
+  @variant lg {
+    padding-inline: 2.5rem;
+  }
 }
 
-/* Small blue uppercase line above a page title:
-   "PREMIER LEAGUE · SEASON 25 · ALL GAMES" */
+/* "PREMIER LEAGUE · SEASON 25" line above a page title */
 @utility eyebrow {
-    font-size: var(--text-caption);
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--color-accent);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent);
 }
 
-/* Grey uppercase column headers in tables and the rank map */
+/* Grey uppercase column headers */
 @utility label-caps {
-    font-size: var(--text-label);
-    line-height: var(--text-label--line-height);
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--color-muted);
+  font-size: var(--text-label);
+  line-height: var(--text-label--line-height);
+  font-weight: 600;
+  letter-spacing: var(--text-label--letter-spacing);
+  text-transform: uppercase;
+  color: var(--color-muted);
 }
 
-/* Big stat numbers: display font, and digits all the same width
-   so columns of numbers line up */
+/* Big numbers: display font with equal-width digits */
 @utility stat {
-    font-family: var(--font-display);
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Rounded % badge used for BTTS, O2.5, period hit rates.
-   Colour is added separately (see HeatPill component). */
-
+/* Rounded % badge; colour comes from RatePill */
 @utility pill {
-    display: inline-block;
-    min-width: 3.25rem;
-    padding: 0.25rem 0.625rem;
-    border-radius: 9999px;
-    font-size: var(--text-caption);
-    font-weight: 600;
-    text-align: center;
-    font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.25rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hide scrollbars on horizontally scrolling tab rows */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }

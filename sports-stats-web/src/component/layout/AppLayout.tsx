@@ -1,19 +1,15 @@
 import { Outlet } from "@tanstack/react-router";
-
+import LeagueBar from "./LeagueBar";
 import Navbar from "./Navbar";
-import LeagueNavbar from "./LeagueNabar";
-import SectionNavbar from "./SectionNavbar";
 
 export default function AppLayout() {
-    return (
-        <div className="min-h-screen bg-white">
-            <Navbar />
-            <LeagueNavbar />
-            <SectionNavbar />
-
-            <main className="page py-8">
-                <Outlet />
-            </main>
-        </div>
-    );
+  return (
+    <div className="min-h-screen bg-white">
+      <Navbar />
+      <LeagueBar />
+      <main className="page py-6 lg:py-8">
+        <Outlet />
+      </main>
+    </div>
+  );
 }
